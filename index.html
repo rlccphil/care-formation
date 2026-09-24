@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#365233">
 <meta name="robots" content="noindex,nofollow">
 <title>Pastoral Care and Formation</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -48,6 +49,59 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 #gateError{color:#8a3b2c;font-size:12px;min-height:16px;margin-top:10px}
 #loading .pdfBtn{margin-top:14px}
 @media(max-width:600px){.headerActions{width:100%;margin-left:0}}
+
+/* ================= RESPONSIVE / MOBILE ================= */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+img{max-width:100%}
+header{padding-left:max(34px,env(safe-area-inset-left));padding-right:max(34px,env(safe-area-inset-right));padding-top:max(18px,env(safe-area-inset-top))}
+main{padding-bottom:max(24px,env(safe-area-inset-bottom));padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}
+.logoBox{width:min(300px,100%)}
+.grid>div{min-width:0}
+.filters>input,.filters>select{flex:1 1 180px;min-width:0}
+.formname span{min-width:0;overflow-wrap:anywhere;padding-right:10px}
+.formname b{flex:0 0 auto}
+.pdfBtn,.hBtn{min-height:40px}
+.tablewrap{-webkit-overflow-scrolling:touch}
+
+@media(max-width:900px){
+  header{flex-wrap:wrap}
+  .headerActions{margin-left:0}
+}
+@media(max-width:700px){
+  header{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+  main{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  .panel{padding:16px 14px;border-radius:12px}
+  .card{padding:14px}
+  h2{font-size:17px}
+  /* 16px inputs stop iOS Safari from zooming in when a field is tapped */
+  input,select{font-size:16px;min-height:44px;width:100%}
+  .filters{gap:8px}
+  .filters>input,.filters>select{flex:1 1 100%}
+  .pdfBtn{min-height:44px;font-size:13px}
+  .hBtn{flex:1;min-height:44px;font-size:13px}
+  #gate{margin:24px auto}
+
+  /* Tables become stacked cards so nothing needs sideways scrolling */
+  .tablewrap{max-height:none;overflow:visible}
+  table,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tr{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff;box-shadow:0 1px 4px #0000000a}
+  td{border:0;padding:5px 0;white-space:normal;display:flex;justify-content:space-between;align-items:flex-start;gap:14px;text-align:right;overflow-wrap:anywhere}
+  td::before{content:attr(data-label);flex:0 0 36%;max-width:36%;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-top:2px}
+  td:first-child{display:block;text-align:left;font-size:15px;font-weight:700;padding:0 0 6px;margin-bottom:4px;border-bottom:1px solid var(--line)}
+  td:first-child::before{display:none}
+  .reason,.context{white-space:normal;text-align:left}
+}
+@media(max-width:380px){
+  .cards{gap:10px}
+  .value{font-size:22px}
+  .label{font-size:11px}
+  .headerText h1{font-size:20px}
+}
+@media(hover:none){
+  .pdfBtn:hover,.hBtn:hover{opacity:1;background:inherit}
+}
 </style>
 </head>
 <body>
@@ -162,11 +216,11 @@ function evidenceLabel(p){
 }
 function possibleRow(p){
   return `<tr>
-    <td>${esc(p.name||'(No name)')}</td>
-    <td>${esc(p.community||'—')}</td>
-    <td>${esc(evidenceLabel(p))}</td>
-    <td>${p.recentEvidenceCount||'—'}</td>
-    <td>${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
+    <td data-label="Person">${esc(p.name||'(No name)')}</td>
+    <td data-label="Community">${esc(p.community||'—')}</td>
+    <td data-label="Evidence">${esc(evidenceLabel(p))}</td>
+    <td data-label="Evidence Count">${p.recentEvidenceCount||'—'}</td>
+    <td data-label="Last Activity">${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
   </tr>`;
 }
 function needRow(p){
@@ -179,11 +233,11 @@ function needRow(p){
     : 'No recent activity';
 
   return `<tr>
-    <td>${esc(p.name||'(No name)')}</td>
-    <td>${esc(p.community||'—')}</td>
-    <td><span class="reason">${esc(reason)}</span></td>
-    <td><span class="context">${esc(generalActivity)}</span></td>
-    <td>${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
+    <td data-label="Person">${esc(p.name||'(No name)')}</td>
+    <td data-label="Community">${esc(p.community||'—')}</td>
+    <td data-label="Reason"><span class="reason">${esc(reason)}</span></td>
+    <td data-label="General Activity"><span class="context">${esc(generalActivity)}</span></td>
+    <td data-label="Last Activity">${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
   </tr>`;
 }
 function apply(){
