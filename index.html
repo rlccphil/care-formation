@@ -13,7 +13,7 @@ header{background:var(--green);color:white;padding:18px 34px;display:flex;align-
 .headerText{min-width:0}
 header h1{margin:0;font-size:30px}header p{margin:7px 0 0;opacity:.88}
 main{max-width:1400px;margin:auto;padding:24px}
-.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:22px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 2px 8px #00000008}
 .label{font-size:12px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em}.value{font-size:30px;font-weight:700;margin-top:8px}.small{font-size:12px;color:var(--muted);margin-top:5px}
 .grid{display:grid;grid-template-columns:2fr 1fr;gap:18px}.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:18px}
@@ -34,6 +34,11 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 @media(max-width:700px){.sectionHead{align-items:flex-start;flex-direction:column}.pdfBtn{width:100%}}
 @media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
 @media(max-width:600px){header{padding:16px 18px;gap:12px;flex-wrap:wrap}.logoBox{width:210px;height:56px;border-radius:10px}.headerText h1{font-size:22px}.headerText p{font-size:12px}main{padding:14px}.cards{grid-template-columns:1fr 1fr}.value{font-size:24px}}
+.filterBar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:white;border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-bottom:18px;position:sticky;top:0;z-index:5;box-shadow:0 2px 8px #00000008}
+.filterBar label{display:flex;flex-direction:column;gap:5px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.filterBar select{min-width:170px;font-size:14px;text-transform:none;letter-spacing:0;color:#263026}
+#viewSummary{margin-left:auto;font-size:13px;color:var(--muted)}
+@media(max-width:600px){.filterBar{position:static}.filterBar label,.filterBar select,.filterBar .pdfBtn{width:100%}#viewSummary{margin-left:0}}
 </style>
 </head>
 <body>
@@ -41,23 +46,30 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 <main>
 <div id="loading">Loading data from the existing RLCC dashboards…</div>
 <div id="app" style="display:none">
+<section class="filterBar" id="filterBar">
+<label>Time Range<select id="fRange"></select></label>
+<label>Area or Category<select id="fArea"></select></label>
+<label>Community<select id="fCommunity"><option value="">All communities</option></select></label>
+<button type="button" class="pdfBtn" id="fReset">Reset</button>
+<span id="viewSummary"></span>
+</section>
 <section class="cards" id="cards"></section>
 <div class="grid">
 <div>
 <div class="panel">
 <div class="sectionHead"><h2>People Possibly Experiencing Pastoral Care and Spiritual Formation</h2><button class="pdfBtn" onclick="downloadPDF('possible')">Download PDF Report</button></div>
-<div class="note">People with at least one piece of documented pastoral-care or spiritual-formation evidence in the last 90 days. Evidence includes pastoral care, community/events, discipleship, spiritual formation, learning, or prayer engagement.</div>
-<div class="filters"><input id="searchPossible" placeholder="Search name or email"><select id="statusPossible"><option value="">All statuses</option><option>Broad Recent Engagement</option><option>Some Recent Engagement</option><option>Limited Recent Engagement</option><option>No Recent Activity</option></select><select id="communityPossible"><option value="">All communities</option></select></div>
+<div class="note" id="possibleNote"></div>
+<div class="filters"><input id="searchPossible" placeholder="Search name or email"></div>
 <div class="tablewrap"><table><thead><tr><th>Person</th><th>Community</th><th>Evidence</th><th>Evidence Count</th><th>Last Activity</th></tr></thead><tbody id="possible"></tbody></table></div></div>
 <div class="panel">
 <div class="sectionHead"><h2>People Who May Need Pastoral Care and Spiritual Formation</h2><button class="pdfBtn" onclick="downloadPDF('need')">Download PDF Report</button></div>
-<div class="note">People with no documented pastoral-care or spiritual-formation evidence in the last 90 days. The list distinguishes people with no recent activity from people who are active in other ways but have no recorded pastoral-care or formation evidence.</div>
-<div class="filters"><input id="searchNeed" placeholder="Search name or email"><select id="statusNeed"><option value="">All statuses</option><option>Broad Recent Engagement</option><option>Some Recent Engagement</option><option>Limited Recent Engagement</option><option>No Recent Activity</option></select><select id="communityNeed"><option value="">All communities</option></select></div>
+<div class="note" id="needNote"></div>
+<div class="filters"><input id="searchNeed" placeholder="Search name or email"></div>
 <div class="tablewrap"><table><thead><tr><th>Person</th><th>Community</th><th>Reason</th><th>Recent General Activity</th><th>Last Activity</th></tr></thead><tbody id="need"></tbody></table></div></div>
 </div>
 <div>
 <div class="panel"><h2>Documented Engagement</h2><div id="bars"></div></div>
-<div class="panel">
+<div class="panel" id="prayerPanel">
 <div class="sectionHead"><h2>Prayer Engagement</h2><span class="badge" id="prayerCount"></span></div>
 <div class="note">People with a recorded “I Prayed” action in the RLCC Prayer app. This reflects actual prayer engagement, not simply submitting a prayer request.</div>
 <div class="tablewrap"><table><thead><tr><th>Person</th><th>Community</th><th>Prayer Actions</th><th>Last Prayed</th></tr></thead><tbody id="prayer"></tbody></table></div></div>
@@ -86,79 +98,153 @@ function loadData(force){
     .catch(err=>{document.getElementById('loading').textContent='Unable to reach the server: '+err.message;});
 }
 loadData(false);
-function render(d){DATA=d;document.getElementById('loading').style.display='none';document.getElementById('app').style.display='block';
-const s=d.summary;
-const cards=[['Members in View',s.total,''],['Recent 30 Days',s.recent30,'documented activity'],['Recent 90 Days',s.recent90,'documented activity'],['No Recent 90 Days',s.noRecent90,'follow-up may be useful'],['Care Activity',s.care,'people with care-related activity'],['Personal Care Log',s.personalCare,'1-on-1 personal care'],['Prayer · 30 Days',s.prayer30,'people who prayed'],['Prayer · 90 Days',s.prayer90,'people who prayed'],['Prayer Actions',s.prayerActivities,'recorded “I Prayed” actions'],['Community',s.community,'community/event evidence'],['Discipleship',s.discipleship,'documented activity'],['Formation',s.formation,'documented activity'],['Leadership',s.leadership,'documented activity'],['Learning',s.learning,'MCG/learning evidence']];
-document.getElementById('cards').innerHTML=cards.map(c=>`<div class="card"><div class="label">${c[0]}</div><div class="value">${c[1]}</div><div class="small">${c[2]}</div></div>`).join('');
-const cs=[['Care',s.care],['Personal Care',s.personalCare],['Prayer',s.prayer],['Community',s.community],['Discipleship',s.discipleship],['Formation',s.formation],['Leadership',s.leadership],['Outreach',s.outreach],['Learning',s.learning]];
-document.getElementById('bars').innerHTML=cs.map(x=>`<div class="formrow"><div class="formname"><span>${x[0]}</span><b>${x[1]}</b></div><div class="bar"><i style="width:${s.total?Math.min(100,x[1]/s.total*100):0}%"></i></div></div>`).join('');
-document.getElementById('forms').innerHTML=d.forms.map(x=>`<div class="formrow"><div class="formname"><span>${esc(x.name)}</span><b>${x.count}</b></div></div>`).join('');
-const prayerPeople=d.people.filter(p=>p.prayerCount>0).sort((a,b)=>(b.prayer90Count-a.prayer90Count)||(b.prayerCount-a.prayerCount)||((b.lastPrayerAt||'').localeCompare(a.lastPrayerAt||''))||(a.name||'').localeCompare(b.name||''));
-document.getElementById('prayerCount').textContent=`${s.prayer90} people in last 90 days`;
-document.getElementById('prayer').innerHTML=prayerPeople.map(p=>`<tr><td>${esc(p.name||'(No name)')}</td><td>${esc(p.community||'—')}</td><td><b>${p.prayerCount}</b>${p.prayer90Count!==p.prayerCount?` <span class="small">(${p.prayer90Count} in 90 days)</span>`:''}</td><td>${p.lastPrayerAt?new Date(p.lastPrayerAt).toLocaleDateString():'—'}</td></tr>`).join('') || '<tr><td colspan="4" class="small">No recorded prayer engagement found.</td></tr>';
-const comm=[...new Set(d.people.map(p=>p.community).filter(Boolean))].sort();
-['communityPossible','communityNeed'].forEach(id=>{document.getElementById(id).innerHTML='<option value="">All communities</option>'+comm.map(x=>`<option>${esc(x)}</option>`).join('')});
-['searchPossible','statusPossible','communityPossible','searchNeed','statusNeed','communityNeed'].forEach(id=>{document.getElementById(id).oninput=apply;document.getElementById(id).onchange=apply});apply()}
-function matches(p,prefix){
-  const q=document.getElementById('search'+prefix).value.toLowerCase();
-  const st=document.getElementById('status'+prefix).value;
-  const co=document.getElementById('community'+prefix).value;
-  return (!q||(p.name+' '+p.email).toLowerCase().includes(q))
-    &&(!st||p.status===st)
-    &&(!co||p.community===co);
-}
-function evidenceLabel(p){
-  return (p.recentEvidence&&p.recentEvidence.length)
-    ? p.recentEvidence.join(' • ')
-    : '—';
-}
-function possibleRow(p){
-  return `<tr>
-    <td>${esc(p.name||'(No name)')}</td>
-    <td>${esc(p.community||'—')}</td>
-    <td>${esc(evidenceLabel(p))}</td>
-    <td>${p.recentEvidenceCount||'—'}</td>
-    <td>${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
-  </tr>`;
-}
-function needRow(p){
-  const reason = !p.recent90
-    ? 'No activity in the last 90 days'
-    : 'No pastoral-care or formation evidence in the last 90 days';
+let VIEW=null,INIT=false;
+const QUAL=['care','community','events','discipleship','formation','learning','personalCare','prayer'];
+const EVLABEL={care:'Pastoral Care',community:'Community',events:'Community/Event',discipleship:'Discipleship',formation:'Spiritual Formation',learning:'Learning',personalCare:'Personal Care & Discipleship',prayer:'Prayer Engagement',leadership:'Leadership',outreach:'Outreach'};
+const AREAS=[['','All areas',null],['care','Care Activity',['care']],['personalCare','Personal Care Log',['personalCare']],['prayer','Prayer',['prayer']],['community','Community & Events',['community','events']],['discipleship','Discipleship',['discipleship']],['formation','Spiritual Formation',['formation']],['leadership','Leadership',['leadership']],['outreach','Outreach',['outreach']],['learning','Learning',['learning']]];
+const RANGES=[['7','Last 7 days'],['30','Last 30 days'],['60','Last 60 days'],['90','Last 90 days'],['0','All time']];
+function $(id){return document.getElementById(id)}
+function areaDef(v){return AREAS.find(a=>a[0]===v)||AREAS[0]}
+function rangeLabel(r){return (RANGES.find(x=>+x[0]===+r)||RANGES[3])[1]}
+function whenText(r){return r?`in the last ${r} days`:'across all recorded history'}
+function fmt(t){return t?new Date(t).toLocaleDateString():'—'}
+function lastTs(arr){let m=0;arr.forEach(a=>{const t=Date.parse(a.date);if(!isNaN(t)&&t>m)m=t});return m}
+function hasCat(a,cs){return (a.categories||[]).some(c=>cs.includes(c))}
+function isPcoForm(name){return name&&!/^(Attendance \(|Prayer — Prayed|Care & Discipleship Log)/.test(name)&&!['events','learning','community'].includes(name)}
 
-  const generalActivity = p.recent90
-    ? 'Some recent activity'
-    : 'No recent activity';
+function render(d){
+  DATA=d;$('loading').style.display='none';$('app').style.display='block';
+  if(!INIT){
+    $('fRange').innerHTML=RANGES.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join('');
+    $('fRange').value='90';
+    $('fArea').innerHTML=AREAS.map(a=>`<option value="${a[0]}">${a[1]}</option>`).join('');
+    ['fRange','fArea','fCommunity','searchPossible','searchNeed'].forEach(id=>{$(id).oninput=apply;$(id).onchange=apply});
+    $('fReset').onclick=()=>{$('fRange').value='90';$('fArea').value='';$('fCommunity').value='';$('searchPossible').value='';$('searchNeed').value='';apply()};
+    INIT=true;
+  }
+  const comm=[...new Set(d.people.map(p=>p.community).filter(Boolean))].sort();
+  const cur=$('fCommunity').value;
+  $('fCommunity').innerHTML='<option value="">All communities</option>'+comm.map(x=>`<option>${esc(x)}</option>`).join('');
+  $('fCommunity').value=cur;
+  apply();
+}
 
-  return `<tr>
-    <td>${esc(p.name||'(No name)')}</td>
-    <td>${esc(p.community||'—')}</td>
-    <td><span class="reason">${esc(reason)}</span></td>
-    <td><span class="context">${esc(generalActivity)}</span></td>
-    <td>${p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'}</td>
-  </tr>`;
+// Builds the filtered view from the full data. All filtering happens in the
+// browser using each person's dated activity list, so no server change is needed.
+function computeView(){
+  const f={range:+$('fRange').value,area:$('fArea').value,comm:$('fCommunity').value};
+  const cut=f.range?Date.now()-f.range*86400000:0;
+  const ad=areaDef(f.area);
+  const cats=ad[2]||QUAL;
+  const rows=DATA.people.filter(p=>!f.comm||p.community===f.comm).map(p=>{
+    const inR=(p.activity||[]).filter(a=>{
+      if(!cut) return true;
+      const t=Date.parse(a.date);
+      return !isNaN(t)&&t>=cut;
+    });
+    const q=inR.filter(a=>hasCat(a,cats));
+    const ev=[...new Set(q.flatMap(a=>(a.categories||[]).filter(c=>cats.includes(c))))].map(c=>EVLABEL[c]).filter(Boolean);
+    return {p,inR,q,ev,anyCount:inR.length,lastQ:lastTs(q)};
+  });
+  return {f,cut,rows,cats};
+}
+
+function renderCards(){
+  const {rows,f}=VIEW,ad=areaDef(f.area);
+  const cnt=cs=>rows.filter(r=>r.inR.some(a=>hasCat(a,cs))).length;
+  const prayerActs=rows.reduce((s,r)=>s+r.inR.filter(a=>hasCat(a,['prayer'])).length,0);
+  const cards=[
+    ['Members in View',rows.length,f.comm||'all communities'],
+    ['Active in Range',rows.filter(r=>r.anyCount>0).length,'any documented activity'],
+    ['No Activity in Range',rows.filter(r=>r.anyCount===0).length,'follow-up may be useful'],
+    [f.area?'Matching Area':'With Evidence',rows.filter(r=>r.q.length>0).length,f.area?ad[1]+' activity':'pastoral care or formation'],
+    ['Care Activity',cnt(['care']),'people with care-related activity'],
+    ['Personal Care Log',cnt(['personalCare']),'1-on-1 personal care'],
+    ['Prayer · People',cnt(['prayer']),'people who prayed'],
+    ['Prayer · Actions',prayerActs,'“I Prayed” actions recorded']
+  ];
+  $('cards').innerHTML=cards.map(c=>`<div class="card"><div class="label">${c[0]}</div><div class="value">${c[1]}</div><div class="small">${c[2]}</div></div>`).join('');
+}
+
+function renderBars(){
+  const {rows,f}=VIEW,sel=areaDef(f.area)[2],n=rows.length;
+  const defs=[['Care',['care']],['Personal Care',['personalCare']],['Prayer',['prayer']],['Community',['community','events']],['Discipleship',['discipleship']],['Formation',['formation']],['Leadership',['leadership']],['Outreach',['outreach']],['Learning',['learning']]];
+  $('bars').innerHTML=defs.map(x=>{
+    const c=rows.filter(r=>r.inR.some(a=>hasCat(a,x[1]))).length;
+    const dim=sel&&sel[0]!==x[1][0]?'opacity:.35':'';
+    return `<div class="formrow" style="${dim}"><div class="formname"><span>${x[0]}</span><b>${c}</b></div><div class="bar"><i style="width:${n?Math.min(100,c/n*100):0}%"></i></div></div>`;
+  }).join('');
+}
+
+function renderForms(){
+  const {rows,f}=VIEW,sel=areaDef(f.area)[2],counts={};
+  rows.forEach(r=>r.inR.forEach(a=>{
+    if(!isPcoForm(a.form)) return;
+    if(sel&&!hasCat(a,sel)) return;
+    counts[a.form]=(counts[a.form]||0)+1;
+  }));
+  const list=Object.keys(counts).map(k=>({name:k,count:counts[k]})).sort((a,b)=>b.count-a.count).slice(0,20);
+  $('forms').innerHTML=list.map(x=>`<div class="formrow"><div class="formname"><span>${esc(x.name)}</span><b>${x.count}</b></div></div>`).join('')||'<div class="note">No form submissions match the current filters.</div>';
+}
+
+function renderPrayer(){
+  const {rows,f}=VIEW;
+  $('prayerPanel').style.display=(f.area&&f.area!=='prayer')?'none':'';
+  const list=rows.map(r=>{
+    const pr=r.inR.filter(a=>hasCat(a,['prayer']));
+    return {p:r.p,n:pr.length,last:lastTs(pr)};
+  }).filter(x=>x.n>0).sort((a,b)=>(b.n-a.n)||(b.last-a.last)||((a.p.name||'').localeCompare(b.p.name||'')));
+  const total=list.reduce((s,x)=>s+x.n,0);
+  $('prayerCount').textContent=`${list.length} ${list.length===1?'person':'people'} · ${total} actions`;
+  $('prayer').innerHTML=list.map(x=>`<tr><td>${esc(x.p.name||'(No name)')}</td><td>${esc(x.p.community||'—')}</td><td><b>${x.n}</b></td><td>${fmt(x.last)}</td></tr>`).join('')||'<tr><td colspan="4" class="small">No prayer actions match the current filters.</td></tr>';
+}
+
+// Rows for either list; used by the on-screen tables and the PDF reports.
+function panelRows(type){
+  const {rows,f}=VIEW,ad=areaDef(f.area);
+  const q=$(type==='possible'?'searchPossible':'searchNeed').value.toLowerCase();
+  const list=rows.filter(r=>!q||((r.p.name||'')+' '+(r.p.email||'')).toLowerCase().includes(q));
+  if(type==='possible'){
+    return list.filter(r=>r.q.length>0).map(r=>({
+      name:r.p.name||'(No name)',community:r.p.community||'—',
+      evidence:r.ev.join(' • ')||'—',count:r.q.length,last:fmt(r.lastQ)
+    }));
+  }
+  return list.filter(r=>r.q.length===0).map(r=>({
+    name:r.p.name||'(No name)',community:r.p.community||'—',
+    reason:r.anyCount===0
+      ?(f.range?`No activity in the last ${f.range} days`:'No recorded activity')
+      :`No ${f.area?ad[1]+' activity':'pastoral-care or formation evidence'} ${f.range?`in the last ${f.range} days`:'recorded'}`,
+    general:r.anyCount>0?'Some activity in range':'No activity in range',
+    last:fmt(Date.parse(r.p.lastActivity))
+  }));
+}
+function possibleRow(r){
+  return `<tr><td>${esc(r.name)}</td><td>${esc(r.community)}</td><td>${esc(r.evidence)}</td><td>${r.count}</td><td>${r.last}</td></tr>`;
+}
+function needRow(r){
+  return `<tr><td>${esc(r.name)}</td><td>${esc(r.community)}</td><td><span class="reason">${esc(r.reason)}</span></td><td><span class="context">${esc(r.general)}</span></td><td>${r.last}</td></tr>`;
 }
 function apply(){
-  // Section 1: only people with qualifying pastoral-care / spiritual-formation
-  // evidence documented in the last 90 days.
-  const possible=DATA.people
-    .filter(p=>p.pastoralFormationEvidence)
-    .filter(p=>matches(p,'Possible'));
-  document.getElementById('possible').innerHTML=possible.map(possibleRow).join('');
-
-  // Section 2: only people with NO qualifying pastoral-care / spiritual-
-  // formation evidence in the last 90 days.
-  const need=DATA.people
-    .filter(p=>!p.pastoralFormationEvidence)
-    .filter(p=>matches(p,'Need'))
-    .slice(0,200);
-  document.getElementById('need').innerHTML=need.map(needRow).join('');
+  VIEW=computeView();
+  renderCards();renderBars();renderForms();renderPrayer();
+  const f=VIEW.f,ad=areaDef(f.area),when=whenText(f.range);
+  const pos=panelRows('possible'),need=panelRows('need');
+  const ppl=n=>`${n} ${n===1?'person':'people'}`;
+  $('possibleNote').textContent=(f.area
+    ?`People with documented ${ad[1]} activity ${when}.`
+    :`People with at least one piece of documented pastoral-care or spiritual-formation evidence ${when}. Evidence includes pastoral care, community/events, discipleship, spiritual formation, learning, personal care, or prayer engagement.`)+` ${ppl(pos.length)} shown.`;
+  $('needNote').textContent=(f.area
+    ?`People with no documented ${ad[1]} activity ${when}.`
+    :`People with no documented pastoral-care or spiritual-formation evidence ${when}. The list distinguishes people with no activity at all from people who are active in other ways but have no recorded evidence.`)
+    +` ${ppl(need.length)}${need.length>200?' (showing the first 200; the PDF includes everyone)':''}.`;
+  $('possible').innerHTML=pos.map(possibleRow).join('')||'<tr><td colspan="5" class="small">No one matches the current filters.</td></tr>';
+  $('need').innerHTML=need.slice(0,200).map(needRow).join('')||'<tr><td colspan="5" class="small">No one matches the current filters.</td></tr>';
+  $('viewSummary').textContent=`${ppl(VIEW.rows.length)} in view · ${rangeLabel(f.range)} · ${ad[1]}${f.comm?' · '+f.comm:''}`;
 }
 function currentFilters(prefix){
-  const status=document.getElementById('status'+prefix).value || 'All statuses';
-  const community=document.getElementById('community'+prefix).value || 'All communities';
-  const search=document.getElementById('search'+prefix).value.trim() || 'All people';
-  return {status,community,search};
+  const f=VIEW.f;
+  return {range:rangeLabel(f.range),area:areaDef(f.area)[1],community:f.comm||'All communities',search:$('search'+prefix).value.trim()||'All people'};
 }
 
 function downloadPDF(type){
@@ -167,20 +253,8 @@ function downloadPDF(type){
     return;
   }
 
-  const prefix=type==='possible'?'Possible':'Need';
-  const filters=currentFilters(prefix);
-  let rows;
-
-  if(type==='possible'){
-    rows=DATA.people
-      .filter(p=>p.pastoralFormationEvidence)
-      .filter(p=>matches(p,'Possible'));
-  }else{
-    rows=DATA.people
-      .filter(p=>!p.pastoralFormationEvidence)
-      .filter(p=>matches(p,'Need'))
-      .slice(0,200);
-  }
+  const filters=currentFilters(type==='possible'?'Possible':'Need');
+  const rows=panelRows(type);
 
   const title=type==='possible'
     ? 'People Possibly Experiencing Pastoral Care and Spiritual Formation'
@@ -204,7 +278,7 @@ function downloadPDF(type){
 
   doc.setFont('helvetica','normal');
   doc.setFontSize(8);
-  doc.text('Filters: Search = '+filters.search+' | Status = '+filters.status+' | Community = '+filters.community,margin,y);
+  doc.text('Filters: Time Range = '+filters.range+' | Area = '+filters.area+' | Community = '+filters.community+' | Search = '+filters.search,margin,y);
   y+=5;
   doc.text('Generated: '+new Date().toLocaleString(),margin,y);
   y+=8;
@@ -244,24 +318,9 @@ function downloadPDF(type){
   }
 
   rows.forEach((p,idx)=>{
-    let cells;
-    if(type==='possible'){
-      cells=[
-        p.name||'(No name)',
-        p.community||'—',
-        evidenceLabel(p),
-        String(p.recentEvidenceCount||'—'),
-        p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'
-      ];
-    }else{
-      cells=[
-        p.name||'(No name)',
-        p.community||'—',
-        !p.recent90?'No activity in the last 90 days':'No pastoral-care or formation evidence in the last 90 days',
-        p.recent90?'Some recent activity':'No recent activity',
-        p.lastActivity?new Date(p.lastActivity).toLocaleDateString():'—'
-      ];
-    }
+    const cells=type==='possible'
+      ? [p.name,p.community,p.evidence,String(p.count),p.last]
+      : [p.name,p.community,p.reason,p.general,p.last];
 
     const lines=cells.map((v,i)=>wrap(v,cols[i][2]));
     const rowH=Math.max(7,...lines.map(a=>a.length*3.5+2));
