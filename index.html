@@ -69,7 +69,23 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 </main>
 <script>
 let DATA=null;
-google.script.run.withSuccessHandler(render).withFailureHandler(err=>{document.getElementById('loading').textContent='Unable to load dashboard data: '+err.message}).getDashboardData();
+// ===== GitHub Pages loader (replaces google.script.run) =====
+const API_URL='https://script.google.com/macros/s/AKfycbyntA_IbVTyqUZpaGSGumMfA1nb4pq0dFLbL8id03eoFEhKRqvXK3VuiSckqss8r3NU/exec'; // the .../exec URL of THIS Apps Script project
+function getKey(force){let k=force?null:sessionStorage.getItem('pcf_key');if(!k){k=prompt('Enter the dashboard access key:')||'';}return k.trim();}
+function loadData(force){
+  const key=getKey(force);
+  if(!key){document.getElementById('loading').textContent='Access key required. Refresh to try again.';return;}
+  document.getElementById('loading').textContent='Loading data from the existing RLCC dashboards… (this can take up to a minute)';
+  fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'getDashboardData',key:key})})
+    .then(r=>r.json())
+    .then(res=>{
+      if(res&&res.ok){sessionStorage.setItem('pcf_key',key);render(res.data);}
+      else if(res&&res.error==='unauthorized'){sessionStorage.removeItem('pcf_key');document.getElementById('loading').textContent='Wrong access key. Refresh and try again.';}
+      else{document.getElementById('loading').textContent='Unable to load dashboard data: '+((res&&res.error)||'unknown error');}
+    })
+    .catch(err=>{document.getElementById('loading').textContent='Unable to reach the server: '+err.message;});
+}
+loadData(false);
 function render(d){DATA=d;document.getElementById('loading').style.display='none';document.getElementById('app').style.display='block';
 const s=d.summary;
 const cards=[['Members in View',s.total,''],['Recent 30 Days',s.recent30,'documented activity'],['Recent 90 Days',s.recent90,'documented activity'],['No Recent 90 Days',s.noRecent90,'follow-up may be useful'],['Care Activity',s.care,'people with care-related activity'],['Personal Care Log',s.personalCare,'1-on-1 mentoring/coaching/counseling/discipling/spiritual direction'],['Prayer · 30 Days',s.prayer30,'people who prayed'],['Prayer · 90 Days',s.prayer90,'people who prayed'],['Prayer Actions',s.prayerActivities,'recorded “I Prayed” actions'],['Community',s.community,'community/event evidence'],['Discipleship',s.discipleship,'documented activity'],['Formation',s.formation,'documented activity'],['Leadership',s.leadership,'documented activity'],['Learning',s.learning,'MCG/learning evidence']];
