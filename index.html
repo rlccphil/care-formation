@@ -39,6 +39,17 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 .filterBar select{min-width:170px;font-size:14px;text-transform:none;letter-spacing:0;color:#263026}
 #viewSummary{margin-left:auto;font-size:13px;color:var(--muted)}
 @media(max-width:600px){.filterBar{position:static}.filterBar label,.filterBar select,.filterBar .pdfBtn{width:100%}#viewSummary{margin-left:0}}
+.qrStats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0 4px}
+.qrStat{background:#f7f8f5;border:1px solid var(--line);border-radius:10px;padding:10px}
+.qrStat b{display:block;font-size:20px}.qrStat span{font-size:11px;color:var(--muted)}
+.qrH{font-size:13px;margin:16px 0 8px;color:var(--green)}
+.qrTrend{display:flex;align-items:flex-end;gap:4px;height:70px;margin-top:6px}
+.qrTrend div{flex:1;background:var(--green);border-radius:4px 4px 0 0;min-height:2px;opacity:.85}
+.qrTrend div.zero{background:#e8ebe6}
+.qrTrendLbl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px}
+#qrUnmatched{margin-top:14px}#qrUnmatched summary{cursor:pointer;color:#6f4b42;font-weight:600}
+#qrUnmatchedList{margin-top:6px}
+@media(max-width:600px){.qrStats{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -74,6 +85,17 @@ input,select{padding:10px 12px;border:1px solid var(--line);border-radius:9px;ba
 <div class="sectionHead"><h2>Prayer Engagement</h2><span class="badge" id="prayerCount"></span></div>
 <div class="note">People with a recorded “I Prayed” action in the RLCC Prayer app. This reflects actual prayer engagement, not simply submitting a prayer request.</div>
 <div class="tablewrap"><table><thead><tr><th>Person</th><th>Community</th><th>Prayer Actions</th><th>Last Prayed</th></tr></thead><tbody id="prayer"></tbody></table></div></div>
+<div class="panel" id="qrPanel">
+<div class="sectionHead"><h2>QR Attendance</h2><span class="badge" id="qrCount"></span></div>
+<div class="note" id="qrNote"></div>
+<div class="qrStats" id="qrStats"></div>
+<h3 class="qrH">Check-ins per week (last 12 weeks)</h3>
+<div class="qrTrend" id="qrTrend"></div><div class="qrTrendLbl"><span>12 weeks ago</span><span>This week</span></div>
+<h3 class="qrH">Recent sessions</h3>
+<div class="tablewrap" style="max-height:280px"><table><thead><tr><th>Date</th><th>Event</th><th>Community</th><th>Present</th></tr></thead><tbody id="qrSessions"></tbody></table></div>
+<h3 class="qrH">Check-ins by community</h3><div id="qrByComm"></div>
+<details id="qrUnmatched" class="note" style="display:none"><summary id="qrUnmatchedSum"></summary><div id="qrUnmatchedList"></div></details>
+</div>
 <div class="panel"><h2>Most Active PCO Forms</h2><div id="forms"></div></div>
 <div class="panel"><h2>About the Data</h2><div class="note">“Documented activity” means activity found in the connected sources, including recorded prayer engagement from the RLCC Prayer app. No recent documented activity does not mean a person is not being cared for. Some pastoral relationships may not yet be recorded in these systems.</div></div>
 </div>
@@ -202,6 +224,61 @@ function renderPrayer(){
   $('prayer').innerHTML=list.map(x=>`<tr><td>${esc(x.p.name||'(No name)')}</td><td>${esc(x.p.community||'—')}</td><td><b>${x.n}</b></td><td>${fmt(x.last)}</td></tr>`).join('')||'<tr><td colspan="4" class="small">No prayer actions match the current filters.</td></tr>';
 }
 
+// QR Attendance panel: data comes from the Dynamic QR Attendance App log.
+// Respects the Time Range and Community filters; each person counts once per session.
+function renderQr(){
+  const f=VIEW.f,cut=VIEW.cut,panel=$('qrPanel');
+  if(f.area&&f.area!=='community'){panel.style.display='none';return}
+  panel.style.display='';
+  const all=(DATA.qrAttendance||[]).map(a=>({t:Date.parse(a[0]),name:a[1],comm:a[2]||'',event:a[3]||'',sid:a[4],ok:a[5]===1,pcomm:a[6]||''}))
+    .filter(a=>!isNaN(a.t));
+  const lc=s=>String(s||'').toLowerCase();
+  const inComm=a=>!f.comm||lc(a.comm)===lc(f.comm)||lc(a.pcomm)===lc(f.comm);
+  const list=all.filter(a=>(!cut||a.t>=cut)&&inComm(a));
+  const sessMap={};
+  list.forEach(a=>{(sessMap[a.sid]=sessMap[a.sid]||[]).push(a)});
+  const people=new Set(list.map(a=>lc(a.name).replace(/\s+/g,' ').trim()));
+  const unmatched=list.filter(a=>!a.ok);
+
+  $('qrCount').textContent=`${list.length} check-in${list.length===1?'':'s'} · ${Object.keys(sessMap).length} session${Object.keys(sessMap).length===1?'':'s'}`;
+  $('qrNote').textContent=all.length
+    ?`Check-ins from the Dynamic QR Attendance App ${whenText(f.range)}${f.comm?' for '+f.comm:''}. Each person is counted once per session.`
+    :'No check-ins recorded yet. They will appear here after the first QR attendance session.';
+  $('qrStats').innerHTML=[['Check-ins',list.length],['People',people.size],['Sessions',Object.keys(sessMap).length],['Not matched',unmatched.length]]
+    .map(x=>`<div class="qrStat"><b>${x[1]}</b><span>${x[0]}</span></div>`).join('');
+
+  // Weekly trend (last 12 weeks, community filter only)
+  const weeks=new Array(12).fill(0),now=Date.now();
+  all.filter(inComm).forEach(a=>{const w=Math.floor((now-a.t)/604800000);if(w>=0&&w<12)weeks[11-w]++});
+  const mx=Math.max(1,...weeks);
+  $('qrTrend').innerHTML=weeks.map((n,i)=>`<div class="${n?'':'zero'}" style="height:${Math.max(3,n/mx*100)}%" title="${n} check-in${n===1?'':'s'}"></div>`).join('');
+
+  // Recent sessions
+  const top=a=>{const c={};a.forEach(x=>{if(x)c[x]=(c[x]||0)+1});const k=Object.keys(c).sort((p,q)=>c[q]-c[p]);return k[0]||''};
+  const sess=Object.keys(sessMap).map(sid=>{
+    const a=sessMap[sid],comms=[...new Set(a.map(x=>x.comm).filter(Boolean))];
+    return {t:Math.min(...a.map(x=>x.t)),event:top(a.map(x=>x.event))||'—',
+      comm:comms.length>2?'Multiple communities':(comms.join(', ')||'—'),n:a.length};
+  }).sort((a,b)=>b.t-a.t).slice(0,10);
+  $('qrSessions').innerHTML=sess.map(s=>`<tr><td>${fmt(s.t)}</td><td>${esc(s.event)}</td><td>${esc(s.comm)}</td><td><b>${s.n}</b></td></tr>`).join('')
+    ||'<tr><td colspan="4" class="small">No sessions match the current filters.</td></tr>';
+
+  // By community
+  const bc={};list.forEach(a=>{const k=a.comm||'(none)';bc[k]=(bc[k]||0)+1});
+  const bl=Object.keys(bc).map(k=>({k,n:bc[k]})).sort((a,b)=>b.n-a.n).slice(0,8),bm=Math.max(1,...bl.map(x=>x.n));
+  $('qrByComm').innerHTML=bl.map(x=>`<div class="formrow"><div class="formname"><span>${esc(x.k)}</span><b>${x.n}</b></div><div class="bar"><i style="width:${x.n/bm*100}%"></i></div></div>`).join('')
+    ||'<div class="note">No check-ins match the current filters.</div>';
+
+  // Names that did not match anyone in the People list
+  const un={};unmatched.forEach(a=>{un[a.name]=(un[a.name]||0)+1});
+  const names=Object.keys(un).sort();
+  $('qrUnmatched').style.display=names.length?'':'none';
+  $('qrUnmatchedSum').textContent=`${names.length} name${names.length===1?'':'s'} could not be matched to the People list`;
+  $('qrUnmatchedList').innerHTML=names.slice(0,40).map(n=>esc(n)+(un[n]>1?' ×'+un[n]:'')).join(' · ')
+    +(names.length>40?` … and ${names.length-40} more`:'')
+    +'<br>These are usually spelling differences or visitors. Matched names also count toward Community &amp; Events activity above.';
+}
+
 // Rows for either list; used by the on-screen tables and the PDF reports.
 function panelRows(type){
   const {rows,f}=VIEW,ad=areaDef(f.area);
@@ -230,7 +307,7 @@ function needRow(r){
 }
 function apply(){
   VIEW=computeView();
-  renderCards();renderBars();renderForms();renderPrayer();
+  renderCards();renderBars();renderForms();renderPrayer();renderQr();
   const f=VIEW.f,ad=areaDef(f.area),when=whenText(f.range);
   const pos=panelRows('possible'),need=panelRows('need');
   const ppl=n=>`${n} ${n===1?'person':'people'}`;
